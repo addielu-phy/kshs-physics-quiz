@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e1420">
+<title>高二物理自學評量 ｜ 雄中 高二下期末</title>
+<meta name="description" content="高雄中學 高二下物理期末自學練習：線上作答、自動評分、錯題與單元分析、逐題詳解，支援多選題與重複練習。">
+<script>/* 先套用已存的版面/顏色，避免畫面閃爍 */(function(){try{var t=JSON.parse(localStorage.getItem("wfquiz_theme"))||{};var d=document.documentElement;d.dataset.theme=t.theme||"dark";d.dataset.accent=t.accent||"ocean";}catch(e){document.documentElement.dataset.theme="dark";document.documentElement.dataset.accent="ocean";}})();</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap" id="app"><!-- JS 渲染 --></div>
+  <div class="lb" id="lightbox"><img id="lbimg" alt=""></div>
+  <!-- Firebase（雲端成績同步，未設定時不啟用） -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script src="theme.js"></script>
+</body>
+</html>
