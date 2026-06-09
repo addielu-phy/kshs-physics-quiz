@@ -12,10 +12,16 @@
 <body>
   <div class="wrap" id="app"><!-- JS 渲染 --></div>
   <div class="lb" id="lightbox"><img id="lbimg" alt=""></div>
-  <!-- Firebase（雲端成績同步，未設定時不啟用） -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <!-- Firebase（雲端成績同步）：只有老師啟用 enabled:true 時才載入，
+       預設關閉 ⇒ 學生端完全離線可用，不會發出對 gstatic 的網路請求。 -->
   <script src="firebase-config.js"></script>
+  <script>
+    if (window.CLOUD && window.CLOUD.enabled) {
+      var fb = "https://www.gstatic.com/firebasejs/10.12.2/";
+      document.write('<script src="' + fb + 'firebase-app-compat.js"><\/script>');
+      document.write('<script src="' + fb + 'firebase-firestore-compat.js"><\/script>');
+    }
+  </script>
   <script src="data.js"></script>
   <script src="app.js"></script>
   <script src="theme.js"></script>
