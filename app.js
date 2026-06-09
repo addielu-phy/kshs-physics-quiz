@@ -97,10 +97,12 @@ function fmtDur(sec) {
   return m > 0 ? `${m} 分 ${s} 秒` : `${s} 秒`;
 }
 function modeLabel(m) { return m === "practice" ? "隨手練習" : m === "wrong" ? "錯題練習" : "全卷測驗"; }
+const ASSET_VER = "20260609b"; // 改圖後更新此值即可破除瀏覽器快取
 function figuresHTML(q) {
   if (!q.img) return "";
   return `<div class="figure">` +
-    q.img.map(src => `<img src="${src}" loading="lazy" alt="第${q.id}題附圖" onclick="zoom('${src}')">`).join("") +
+    q.img.map(src => { const u = src + "?v=" + ASSET_VER;
+      return `<img src="${u}" loading="lazy" alt="第${q.id}題附圖" onclick="zoom('${u}')">`; }).join("") +
     `<div class="figcap">點圖可放大</div></div>`;
 }
 function multiHint(q) {
