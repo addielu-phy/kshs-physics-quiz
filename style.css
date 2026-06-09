@@ -177,6 +177,7 @@ table.diag td.r{text-align:right;white-space:nowrap}
 .review-item{border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin:12px 0;background:var(--card)}
 .review-item.ok{border-left:4px solid var(--good)}
 .review-item.ng{border-left:4px solid var(--bad)}
+.review-item.pt{border-left:4px solid var(--warn)}
 .expl{margin-top:10px;padding:11px 13px;border-radius:10px;background:var(--expl-bg);
   border:1px solid var(--expl-line);font-size:.95rem;color:var(--expl-txt)}
 .expl b{color:var(--accent2)}

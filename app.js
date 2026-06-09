@@ -41,9 +41,37 @@ function isCorrect(q, ans) {
   if (q.multi) return arrEq(ans, q.a);
   return ans === q.a;
 }
+/* 得分：單選＝全有或全無；多選＝分科型部分給分（每選項各自判定，
+   與標準答案一致 +題分/選項數、不一致倒扣同值，最低 0 分） */
+function scoreOf(q, ans) {
+  const full = qPoints(q);
+  if (!answered(ans, q)) return 0;
+  if (!q.multi) return ans === q.a ? full : 0;
+  const n = q.o.length, per = full / n;
+  let consistent = 0;
+  for (let i = 0; i < n; i++) {
+    const should = q.a.includes(i);
+    const did = Array.isArray(ans) && ans.includes(i);
+    if (should === did) consistent++;
+  }
+  const raw = (consistent - (n - consistent)) * per; // 對的減錯的
+  return Math.max(0, Math.round(raw * 100) / 100);
+}
+/* 顯示用狀態：right=全對、partial=多選部分對、wrong=錯/未作答 */
+function gradeOf(q, ans) {
+  const pts = scoreOf(q, ans);
+  if (isCorrect(q, ans)) return { state: "right", pts };
+  if (q.multi && pts > 0) return { state: "partial", pts };
+  return { state: "wrong", pts };
+}
+function fmtPts(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
 function ansLetters(q) {
   if (q.multi) return q.a.slice().sort((a, b) => a - b).map(i => LETTERS[i]).join("、");
   return LETTERS[q.a];
+}
+/* 顯示用：把使用者輸入的名字做 HTML escape，避免 < > & 破版 */
+function escHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
 /* ---------- 雲端同步（Firebase，未設定時自動略過） ---------- */
@@ -107,7 +135,7 @@ function figuresHTML(q) {
 }
 function multiHint(q) {
   return q.multi
-    ? `<div class="chip warn" style="margin-bottom:10px">✦ 多選題（${qPoints(q)} 分）：可選多個答案，<b>全部選對才得分</b></div>`
+    ? `<div class="chip warn" style="margin-bottom:10px">✦ 多選題（${qPoints(q)} 分）：可選多個答案，<b>答對的選項得分、答錯倒扣</b>（最低 0 分）</div>`
     : "";
 }
 
@@ -130,7 +158,7 @@ function viewLogin() {
     <hr class="sep">
     <label class="lbl">曾經練習過的學生（點選即可繼續）</label>
     <div class="row">
-      ${names.map(n => `<button class="btn sm" onclick="enter('${encodeURIComponent(n)}')">👤 ${n}
+      ${names.map(n => `<button class="btn sm" onclick="enter('${encodeURIComponent(n)}')">👤 ${escHtml(n)}
         <span class="muted small">（${db.profiles[n].attempts.length} 次）</span></button>`).join("")}
     </div>` : "";
 
@@ -183,12 +211,13 @@ function viewDashboard(name) {
   let history = `<p class="muted">還沒有紀錄，開始第一次練習吧！</p>`;
   if (atts.length) {
     history = atts.map((a, i) => {
-      const prev = i > 0 ? atts[i - 1] : null;
+      // 只與「同一種練習模式」的上一次比較，避免隨手練習與正式測驗混在一起
+      const prev = atts.slice(0, i).reverse().find(x => x.mode === a.mode) || null;
       let delta = "";
       if (prev) {
         const d = pct(a) - pct(prev);
-        delta = d === 0 ? `<span class="muted small">持平</span>`
-          : `<span class="delta ${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d)}%</span>`;
+        delta = d === 0 ? `<span class="muted small">與上次同模式持平</span>`
+          : `<span class="delta ${d > 0 ? "up" : "down"}" title="與上一次${modeLabel(a.mode)}相比">${d > 0 ? "▲" : "▼"} ${Math.abs(d)}%</span>`;
       }
       return `<div class="att">
         <div class="badge">${a.score}</div>
@@ -220,7 +249,7 @@ function viewDashboard(name) {
   app.innerHTML = `
     <div class="spread">
       <div class="brand"><div class="logo">物</div>
-        <div><h1>${name} 的練習室</h1><div class="sub">${QUIZ_META.grade}・${QUIZ_META.subject}</div></div>
+        <div><h1>${escHtml(name)} 的練習室</h1><div class="sub">${QUIZ_META.grade}・${QUIZ_META.subject}</div></div>
       </div>
       <button class="btn sm ghost" onclick="viewLogin()">切換 / 登出</button>
     </div>
@@ -309,7 +338,7 @@ function renderQuestion() {
   app.innerHTML = `
     <div class="spread">
       <div><b>${s.mode === "wrong" ? "錯題練習" : "全卷測驗"}</b>
-        <span class="muted small">　${s.name}</span></div>
+        <span class="muted small">　${escHtml(s.name)}</span></div>
       <button class="btn sm ghost" onclick="quitQuiz()">離開</button>
     </div>
     <div class="card tight">
@@ -376,8 +405,10 @@ window.submitQuiz = function () {
   let correct = 0, score = 0; const wrongIds = [];
   s.ids.forEach(id => {
     const q = qById(id);
-    if (isCorrect(q, s.answers[id])) { correct++; score += qPoints(q); } else wrongIds.push(id);
+    score += scoreOf(q, s.answers[id]);
+    if (isCorrect(q, s.answers[id])) correct++; else wrongIds.push(id);
   });
+  score = Math.round(score * 100) / 100;
   const db = load();
   getProfile(s.name);
   const list = (db.profiles[s.name] || (db.profiles[s.name] = { created: Date.now(), attempts: [] })).attempts;
@@ -464,7 +495,11 @@ function renderResult(name, index) {
   const review = showIds.length ? showIds.map(id => {
     const q = qById(id);
     const my = att.answers[id];
-    const ok = isCorrect(q, my);
+    const g = gradeOf(q, my);
+    const itemCls = g.state === "right" ? "ok" : g.state === "partial" ? "pt" : "ng";
+    const chipCls = g.state === "right" ? "good" : g.state === "partial" ? "warn" : "bad";
+    const chipTxt = g.state === "right" ? "✓ 答對"
+      : g.state === "partial" ? `◐ 部分對 ${fmtPts(g.pts)}/${qPoints(q)} 分` : "✗ 答錯";
     const opts = q.o.map((txt, i) => {
       const isAns = q.multi ? q.a.includes(i) : i === q.a;
       const isMy = q.multi ? (Array.isArray(my) && my.includes(i)) : i === my;
@@ -475,10 +510,10 @@ function renderResult(name, index) {
       return `<div class="${cls}"><span class="k">${LETTERS[i]}</span>
         <span>${q.oi ? "選項 " + LETTERS[i] : txt}</span>${mk ? `<span class="mk">${mk}</span>` : ""}</div>`;
     }).join("");
-    return `<div class="review-item ${ok ? "ok" : "ng"}">
+    return `<div class="review-item ${itemCls}">
       <div class="qhead">
         <span class="qno">${q.id}.</span>
-        <span class="chip ${ok ? "good" : "bad"}">${ok ? "✓ 答對" : "✗ 答錯"}</span>
+        <span class="chip ${chipCls}">${chipTxt}</span>
         <span class="chip unit">${q.u}</span>
         ${q.multi ? '<span class="chip warn">多選</span>' : ""}
         ${!answered(my, q) ? '<span class="chip">未作答</span>' : ""}
@@ -486,7 +521,7 @@ function renderResult(name, index) {
       <div class="stem">${q.s}</div>
       ${figuresHTML(q)}
       <div class="opts">${opts}</div>
-      <div class="ansline"><b>正解：</b>${ansLetters(q)}</div>
+      <div class="ansline"><b>正解：</b>${ansLetters(q)}${q.multi ? ` <span class="muted small">（你得 ${fmtPts(g.pts)} / ${qPoints(q)} 分）</span>` : ""}</div>
       <div class="expl"><b>💡 詳解：</b>${q.e}</div>
     </div>`;
   }).join("") : `<p class="muted center">這次全部答對，沒有錯題 🎉</p>`;
@@ -494,7 +529,7 @@ function renderResult(name, index) {
   app.innerHTML = `
     <div class="spread">
       <div class="brand"><div class="logo">物</div>
-        <div><h1>成績與解析</h1><div class="sub">${name}・第 ${att.n} 次・${modeLabel(att.mode)}</div></div></div>
+        <div><h1>成績與解析</h1><div class="sub">${escHtml(name)}・第 ${att.n} 次・${modeLabel(att.mode)}</div></div></div>
       <button class="btn sm ghost" onclick="viewDashboard('${encodeURIComponent(name)}')">回首頁</button>
     </div>
 
@@ -568,7 +603,7 @@ function renderPractice() {
   const answeredCount = Object.keys(s.answers).length;
   const correctCount = s.ids.filter(qid => isCorrect(qById(qid), s.answers[qid])).length;
   const my = s.answers[id], revealed = s.revealed;
-  const ok = revealed && isCorrect(q, my);
+  const g = revealed ? gradeOf(q, my) : null;
 
   const opts = q.o.map((txt, i) => {
     let cls = "opt";
@@ -582,11 +617,19 @@ function renderPractice() {
       <span class="k">${LETTERS[i]}</span><span>${q.oi ? "選項 " + LETTERS[i] + "（見上方圖）" : txt}</span>${mk ? `<span class="mk">${mk}</span>` : ""}</button>`;
   }).join("");
 
-  const feedback = revealed ? `
-    <div class="card tight" style="border-color:${ok ? "var(--good)" : "var(--bad)"}">
-      <div class="qhead"><span class="chip ${ok ? "good" : "bad"}">${ok ? "✓ 答對了！" : "✗ 答錯了，正解是 " + ansLetters(q)}</span></div>
+  let feedback = "";
+  if (revealed) {
+    const cls = g.state === "right" ? "good" : g.state === "partial" ? "warn" : "bad";
+    const border = g.state === "right" ? "var(--good)" : g.state === "partial" ? "var(--warn)" : "var(--bad)";
+    const txt = g.state === "right" ? "✓ 答對了！"
+      : g.state === "partial" ? `◐ 部分對：得 ${fmtPts(g.pts)} / ${qPoints(q)} 分，正解是 ${ansLetters(q)}`
+      : "✗ 答錯了，正解是 " + ansLetters(q);
+    feedback = `
+    <div class="card tight" style="border-color:${border}">
+      <div class="qhead"><span class="chip ${cls}">${txt}</span></div>
       <div class="expl"><b>💡 詳解：</b>${q.e}</div>
-    </div>` : "";
+    </div>`;
+  }
 
   let controls;
   if (!revealed) {
@@ -602,7 +645,7 @@ function renderPractice() {
 
   app.innerHTML = `
     <div class="spread">
-      <div><b>⚡ 隨手練習</b><span class="muted small">　${s.name}</span></div>
+      <div><b>⚡ 隨手練習</b><span class="muted small">　${escHtml(s.name)}</span></div>
       <button class="btn sm ghost" onclick="quitPractice()">離開</button>
     </div>
     <div class="card tight">
@@ -647,7 +690,8 @@ window.nextPractice = function () { session.idx++; session.revealed = false; ren
 window.quitPractice = function () { if (confirm("離開隨手練習？這次練習不會被記錄。")) { const n = session.name; session = null; viewDashboard(n); } };
 window.finishPractice = function () {
   const s = session; let correct = 0, score = 0; const wrongIds = [];
-  s.ids.forEach(id => { const q = qById(id); if (isCorrect(q, s.answers[id])) { correct++; score += qPoints(q); } else wrongIds.push(id); });
+  s.ids.forEach(id => { const q = qById(id); score += scoreOf(q, s.answers[id]); if (isCorrect(q, s.answers[id])) correct++; else wrongIds.push(id); });
+  score = Math.round(score * 100) / 100;
   wrongIds.sort((a, b) => a - b);
   const db = load(); getProfile(s.name);
   const list = (db.profiles[s.name] || (db.profiles[s.name] = { created: Date.now(), attempts: [] })).attempts;
@@ -676,7 +720,7 @@ function renderPracticeSummary(name, att) {
 
   app.innerHTML = `
     <div class="spread">
-      <div class="brand"><div class="logo">⚡</div><div><h1>隨手練習結果</h1><div class="sub">${name}・隨手練習</div></div></div>
+      <div class="brand"><div class="logo">⚡</div><div><h1>隨手練習結果</h1><div class="sub">${escHtml(name)}・隨手練習</div></div></div>
       <button class="btn sm ghost" onclick="viewDashboard('${encodeURIComponent(name)}')">回首頁</button>
     </div>
     <div class="card center">
