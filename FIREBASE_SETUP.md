@@ -28,7 +28,7 @@
    - 學生端**不需要**任何帳號。
 
 ## 步驟 5：設定安全規則（重要！只有老師讀得到）
-Firestore → **Rules** 分頁，整段貼上以下內容，把兩處 `teacher@example.com` 換成**你步驟 4 建立的老師 Email**，再「發布」：
+Firestore → **Rules** 分頁，整段貼上以下內容（已把老師 Email 填成 `cylcphychem@gmail.com`；若你步驟 4 用的是別的 Email，改這一處再發布）：
 
 ```
 rules_version = '2';
@@ -36,7 +36,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /results/{id} {
       allow create: if isValid(request.resource.data);
-      allow read:   if request.auth != null && request.auth.token.email == "teacher@example.com";
+      allow read:   if request.auth != null && request.auth.token.email == "cylcphychem@gmail.com";
       allow update, delete: if false;
       function isValid(d) {
         return d.name is string && d.name.size() > 0 && d.name.size() <= 40
@@ -58,7 +58,7 @@ service cloud.firestore {
 ```js
 window.CLOUD = {
   enabled: true,
-  teacherEmail: "teacher@example.com",   // 與步驟 4 / 步驟 5 同一個 Email
+  teacherEmail: "cylcphychem@gmail.com",   // 與步驟 4 / 步驟 5 同一個 Email
   config: {
     apiKey: "貼上你的",
     authDomain: "你的專案.firebaseapp.com",
