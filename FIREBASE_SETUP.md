@@ -1,6 +1,6 @@
 # 老師端雲端成績 — Firebase 設定步驟
 
-完成這份設定後，學生每次交卷會自動把成績上傳雲端，老師打開 `teacher.html` 用 Email 登入即可看到全班成績。
+完成這份設定後，學生**每次交卷與每次完成隨手練習**都會自動把成績上傳雲端，老師打開 `teacher.html` 用 Email 登入即可看到全班成績（含隨手練習明細）。
 **設定前學生網站照常運作**（成績暫存在各自瀏覽器），設定完成後才開始上傳。
 
 整個流程約 10 分鐘，全部在 Firebase 控制台點一點。
@@ -40,7 +40,7 @@ service cloud.firestore {
       allow update, delete: if false;
       function isValid(d) {
         return d.name is string && d.name.size() > 0 && d.name.size() <= 40
-          && d.score is int && d.score >= 0 && d.score <= 200
+          && d.score is number && d.score >= 0 && d.score <= 200
           && d.correct is int && d.total is int && d.total > 0
           && d.ts == request.time;
       }
@@ -73,8 +73,8 @@ window.CLOUD = {
 ## 步驟 7：上線
 把改好的檔案推上 GitHub（`git add -A && git commit -m "啟用雲端成績" && git push`），
 GitHub Pages 約 1 分鐘更新。之後：
-- 學生：https://addielu-phy.github.io/physics-quiz/ （照常作答，交卷後會顯示「✓ 已上傳到老師端」）
-- 老師：https://addielu-phy.github.io/physics-quiz/teacher.html （用老師 Email 登入看全班）
+- 學生：https://addielu-phy.github.io/kshs-physics-quiz/ （照常作答，交卷或完成隨手練習後會顯示「✓ 已上傳到老師端」）
+- 老師：https://addielu-phy.github.io/kshs-physics-quiz/teacher.html （用老師 Email 登入看全班，含隨手練習）
 
 ---
 

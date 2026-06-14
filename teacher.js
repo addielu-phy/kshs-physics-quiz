@@ -4,12 +4,17 @@
    =========================================================== */
 "use strict";
 const app = document.getElementById("app");
-const LETTERS = ["A", "B", "C", "D"];
+const LETTERS = ["A", "B", "C", "D", "E"];
 
 /* 題目索引：題號 → 題目資料 */
 const QMAP = {};
 QUESTIONS.forEach(q => QMAP[q.id] = q);
 const UNITS = [...new Set(QUESTIONS.map(q => q.u))];
+
+/* 正解標籤：單選 → "A"；多選 → "A、C、E" */
+function ansLabel(q) { return q.multi ? (q.a || []).map(i => LETTERS[i]).join("、") : LETTERS[q.a]; }
+/* 分數可能因部分給分出現小數，整數就原樣顯示，否則保留一位 */
+function fmtNum(n) { return n == null ? "—" : (Number.isInteger(n) ? String(n) : (Math.round(n * 10) / 10).toFixed(1)); }
 
 function cloudOn() { return !!(window.CLOUD && CLOUD.enabled && typeof firebase !== "undefined" && CLOUD.config && CLOUD.config.projectId); }
 function fmtDate(d) {
@@ -85,12 +90,14 @@ function loadData(user) {
 /* ---------- 統計 ---------- */
 function computeStats(rows) {
   const full = rows.filter(r => r.mode === "full");
+  const practice = rows.filter(r => r.mode !== "full");
   const students = {};
   rows.forEach(r => {
     const k = r.name || "(未命名)";
-    if (!students[k]) students[k] = { name: k, all: [], full: [] };
+    if (!students[k]) students[k] = { name: k, all: [], full: [], practice: [] };
     students[k].all.push(r);
     if (r.mode === "full") students[k].full.push(r);
+    else students[k].practice.push(r);
   });
   Object.values(students).forEach(s => {
     s.bestFull = s.full.length ? Math.max(...s.full.map(a => a.score)) : null;
@@ -103,7 +110,7 @@ function computeStats(rows) {
   QUESTIONS.forEach(q => qWrong[q.id] = 0);
   full.forEach(r => (r.wrongIds || []).forEach(id => { if (qWrong[id] !== undefined) qWrong[id]++; }));
   const qStats = QUESTIONS.map(q => ({
-    id: q.id, u: q.u, ans: LETTERS[q.a],
+    id: q.id, u: q.u, ans: ansLabel(q),
     wrong: qWrong[q.id], n: fullN, rate: fullN ? qWrong[q.id] / fullN : 0
   }));
   // 單元錯誤率
@@ -115,7 +122,7 @@ function computeStats(rows) {
   });
   const scores = full.map(a => a.score);
   return {
-    students, full, fullN,
+    students, full, fullN, practiceN: practice.length,
     avg: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
     max: scores.length ? Math.max(...scores) : null,
     min: scores.length ? Math.min(...scores) : null,
@@ -156,18 +163,19 @@ function renderDash(user) {
   else studs.sort((a, b) => (tsToDate(b.latest) || 0) - (tsToDate(a.latest) || 0));
 
   const studRows = studs.map((s, i) => {
-    const best = s.bestFull != null ? s.bestFull : "—";
-    const latestScore = s.latestFull ? s.latestFull.score : (s.latest ? s.latest.score : "—");
+    const best = fmtNum(s.bestFull);
+    const latestScore = fmtNum(s.latestFull ? s.latestFull.score : (s.latest ? s.latest.score : null));
     const col = s.bestFull == null ? "var(--muted)" : s.bestFull >= 60 ? "var(--good)" : "var(--bad)";
     return `<tr style="cursor:pointer" onclick="toggleStu(${i})">
         <td>▸ ${s.name}</td>
-        <td class="r">${s.all.length}</td>
+        <td class="r">${s.full.length}</td>
+        <td class="r">${s.practice.length}</td>
         <td class="r" style="color:${col};font-weight:700">${best}</td>
         <td class="r">${latestScore}</td>
         <td class="r small muted">${fmtDate(tsToDate(s.latest))}</td>
       </tr>
-      <tr id="stu${i}" style="display:none"><td colspan="5">${stuDetail(s)}</td></tr>`;
-  }).join("") || `<tr><td colspan="5" class="muted">還沒有學生上傳成績</td></tr>`;
+      <tr id="stu${i}" style="display:none"><td colspan="6">${stuDetail(s)}</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="muted">還沒有學生上傳成績</td></tr>`;
 
   app.innerHTML = `
     <div class="spread">
@@ -186,6 +194,7 @@ function renderDash(user) {
         <div class="b"><div class="n">${nStudents}</div><div class="t">學生人數</div></div>
         <div class="b"><div class="n">${ROWS.length}</div><div class="t">總作答次數</div></div>
         <div class="b"><div class="n">${st.fullN}</div><div class="t">全卷完成數</div></div>
+        <div class="b"><div class="n">${st.practiceN}</div><div class="t">隨手練習數</div></div>
         <div class="b"><div class="n">${st.avg ?? "—"}</div><div class="t">全卷平均分</div></div>
         <div class="b"><div class="n">${st.max ?? "—"}</div><div class="t">最高分</div></div>
         <div class="b"><div class="n">${st.min ?? "—"}</div><div class="t">最低分</div></div>
@@ -220,11 +229,12 @@ function renderDash(user) {
         </select>
       </div>
       <table class="diag">
-        <tr><th>學生</th><th class="r">練習次數</th><th class="r">最佳分</th><th class="r">最近分</th><th class="r">最近時間</th></tr>
+        <tr><th>學生</th><th class="r">全卷</th><th class="r">隨手</th><th class="r">最佳分</th><th class="r">最近分</th><th class="r">最近時間</th></tr>
         ${studRows}
       </table>
+      <p class="muted small" style="margin-top:8px">「全卷」「隨手」為各模式作答次數；點任一列可展開該生每一次（含隨手練習）的明細。</p>
     </div>
-    <div class="foot">資料來源：Firestore「results」集合。學生每次交卷自動上傳。</div>
+    <div class="foot">資料來源：Firestore「results」集合。學生每次交卷／完成隨手練習都會自動上傳。</div>
   `;
   document.getElementById("sortSel") && (document.getElementById("sortSel").value = studentSort);
 }
@@ -232,8 +242,9 @@ function renderDash(user) {
 function stuDetail(s) {
   const list = s.all.slice().sort((a, b) => (tsToDate(b) || 0) - (tsToDate(a) || 0)).map(a => {
     const wrongTxt = (a.wrongIds && a.wrongIds.length) ? a.wrongIds.join("、") : "（全對）";
+    const mx = a.maxScore != null ? `<span style="font-size:.55em;font-weight:400;color:var(--muted)">/${a.maxScore}</span>` : "";
     return `<div class="att">
-      <div class="badge">${a.score}</div>
+      <div class="badge">${fmtNum(a.score)}${mx}</div>
       <div class="grow">
         <span class="chip">${modeLabel(a.mode)}</span>
         答對 ${a.correct}/${a.total}・用時 ${fmtDur(a.durationSec || 0)}
@@ -252,13 +263,13 @@ window.setSort = function (v) { studentSort = v; renderDash(firebase.auth().curr
 
 /* ---------- CSV 匯出 ---------- */
 window.exportCSV = function () {
-  const head = ["姓名", "第幾次", "模式", "分數", "答對", "總題", "錯題數", "用時(秒)", "作答時間", "錯題題號"];
+  const head = ["姓名", "第幾次", "模式", "分數", "滿分", "答對", "總題", "錯題數", "用時(秒)", "作答時間", "錯題題號"];
   const lines = [head.join(",")];
   ROWS.slice().sort((a, b) => (tsToDate(a) || 0) - (tsToDate(b) || 0)).forEach(r => {
     const row = [
       `"${(r.name || "").replace(/"/g, '""')}"`,
       r.attemptNo || "", modeLabel(r.mode),
-      r.score, r.correct, r.total, (r.wrongIds || []).length,
+      r.score, r.maxScore != null ? r.maxScore : "", r.correct, r.total, (r.wrongIds || []).length,
       r.durationSec || "", `"${fmtDate(tsToDate(r))}"`,
       `"${(r.wrongIds || []).join(" ")}"`
     ];
